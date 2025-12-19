@@ -260,17 +260,71 @@ def clientes_com_desconto
   pausar
 end
 
+# LISTAR CLIENTES/ 'PRODUTOS
+def listar_clientes
+  limpar_tela
+  puts "CLIENTES CADASTRADOS\n\n"
+
+  clientes = DB.execute("SELECT * FROM clientes")
+
+  if clientes.empty?
+    puts "Nenhum cliente cadastrado."
+  else
+    clientes.each do |c|
+      puts "ID: #{c['id_cliente']} - Nome: #{c['nome']}"
+    end
+  end
+
+  pausar
+end
+
+def listar_produtos
+  limpar_tela
+  puts "PRODUTOS CADASTRADOS\n\n"
+
+  produtos = DB.execute("SELECT * FROM produtos")
+
+  if produtos.empty?
+    puts "Nenhum produto cadastrado."
+  else
+    produtos.each do |p|
+      puts "ID: #{p['id_produto']} - Nome: #{p['nome']} - Preço: R$ #{p['preco']} - Tipo: #{p['tipo']}"
+    end
+  end
+
+  pausar
+end
 
 # MENUS
 MENU = <<~MENU
   ---------------------------------
           CAMPUS FOOD
   ---------------------------------
-  1 - Cadastrar Cliente
-  2 - Cadastrar Produto
+  1 - Clientes
+  2 - Produtos
   3 - Registrar Venda
   4 - Relatórios
   5 - Sair
+  ---------------------------------
+MENU
+
+MENU_CLIENTES = <<~MENU
+  ---------------------------------
+          MENU CLIENTES
+  ---------------------------------
+  1 - Cadastrar clientes
+  2 - Listar clientes
+  3 - voltar
+  ---------------------------------
+MENU
+
+MENU_PRODUTOS = <<~MENU
+  ---------------------------------
+          MENU PRODUTOS
+  ---------------------------------
+  1 - Cadastrar produtos
+  2 - Listar produtos
+  3 - voltar
   ---------------------------------
 MENU
 
@@ -294,8 +348,39 @@ def menu_principal
     op = gets.chomp.to_i
 
     case op
-    when 1 then cadastrar_cliente
-    when 2 then cadastrar_produto
+    when 1 
+      loop do
+        limpar_tela
+        puts MENU_CLIENTES
+        print "Escolha uma opção: "
+        c = gets.chomp.to_i
+
+        case c
+        when 1 then cadastrar_cliente
+        when 2 then listar_clientes
+        when 3 then break
+        else
+          puts "Opção inválida!"
+          pausar
+        end
+      end
+
+    when 2
+      loop do
+        limpar_tela
+        puts MENU_PRODUTOS
+        print "Escolha uma opção: "
+        p = gets.chomp.to_i
+
+        case p
+        when 1 then cadastrar_produto
+        when 2 then listar_produtos
+        when 3 then break
+        else
+          puts "Opção inválida!"
+          pausar
+        end
+      end 
     when 3 then registrar_venda
     when 4
       loop do
