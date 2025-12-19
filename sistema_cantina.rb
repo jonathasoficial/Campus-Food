@@ -1,14 +1,12 @@
 require "sqlite3"
+require "date"
 
-# ======================================
 # CONFIGURAÇÃO DO BANCO DE DADOS
-# ======================================
 DB = SQLite3::Database.new("cantina.db")
 DB.results_as_hash = true
 
-# ======================================
+
 # CRIAÇÃO DAS TABELAS
-# ======================================
 DB.execute <<-SQL
 CREATE TABLE IF NOT EXISTS clientes (
   id_cliente INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,9 +45,8 @@ CREATE TABLE IF NOT EXISTS itens_venda (
 );
 SQL
 
-# ======================================
+
 # FUNÇÕES AUXILIARES
-# ======================================
 def limpar_tela
   system("clear") || system("cls")
 end
@@ -59,9 +56,8 @@ def pausar
   gets
 end
 
-# ======================================
+
 # CADASTROS
-# ======================================
 def cadastrar_cliente
   limpar_tela
   print "Nome do cliente: "
@@ -89,9 +85,8 @@ def cadastrar_produto
   pausar
 end
 
-# ======================================
-# REGISTRO DE VENDA (MÚLTIPLOS PRODUTOS)
-# ======================================
+
+# REGISTRO DE VENDA (COM DESCONTO)
 def registrar_venda
   limpar_tela
 
@@ -110,7 +105,7 @@ def registrar_venda
   )
 
   id_venda = DB.last_insert_row_id
-  total = 0.0
+  subtotal = 0.0
 
   loop do
     limpar_tela
@@ -131,8 +126,8 @@ def registrar_venda
       [id_produto]
     ).first
 
-    subtotal = produto["preco"] * quantidade
-    total += subtotal
+    valor = produto["preco"] * quantidade
+    subtotal += valor
 
     DB.execute(
       "INSERT INTO itens_venda (id_venda, id_produto, quantidade, preco_unitario)
@@ -141,31 +136,67 @@ def registrar_venda
     )
   end
 
+  # CÁLCULO DE DESCONTO
+  dias = DB.execute(
+    "SELECT COUNT(DISTINCT DATE(data_hora)) AS dias
+     FROM vendas
+     WHERE id_cliente = ?",
+    [id_cliente]
+  ).first["dias"]
+
+  percentual =
+    if dias >= 20
+      0.20
+    elsif dias >= 2
+      0.10
+    else
+      0.0
+    end
+
+  valor_desconto = subtotal * percentual
+  total_final = subtotal - valor_desconto
+
   DB.execute(
     "UPDATE vendas SET valor_total = ? WHERE id_venda = ?",
-    [total, id_venda]
+    [total_final, id_venda]
   )
 
+  # EXIBIÇÃO FINAL DA VENDA
   puts "\nVenda registrada com sucesso!"
-  puts "Valor total: R$ #{total}"
+  puts "Subtotal: R$ #{'%.2f' % subtotal}"
+
+  if percentual > 0
+    puts "Desconto aplicado: #{(percentual * 100).to_i}% (-R$ #{'%.2f' % valor_desconto})"
+  end
+
+  puts "Total final: R$ #{'%.2f' % total_final}"
   pausar
 end
 
-# ======================================
+
 # RELATÓRIOS
-# ======================================
 def listar_vendas
   limpar_tela
 
-  query = <<-SQL
-    SELECT v.id_venda, c.nome, v.valor_total, v.data_hora
+  vendas = DB.execute <<-SQL
+    SELECT v.id_venda, v.data_hora, v.valor_total, c.nome AS cliente
     FROM vendas v
     INNER JOIN clientes c ON v.id_cliente = c.id_cliente
-    ORDER BY v.data_hora DESC
+    ORDER BY v.id_venda ASC
   SQL
 
-  DB.execute(query).each do |v|
-    puts "Venda ##{v['id_venda']} | #{v['nome']} | R$ #{v['valor_total']} | #{v['data_hora']}"
+  if vendas.empty?
+    puts "Nenhuma venda registrada."
+    pausar
+    return
+  end
+
+  vendas.each do |v|
+    puts "Venda ##{v['id_venda']}"
+    puts "Cliente: #{v['cliente']}"
+    puts "Data: #{v['data_hora']}"
+    puts "Total da venda: R$ #{v['valor_total']}"
+    puts "-" * 40
   end
 
   pausar
@@ -173,15 +204,16 @@ end
 
 def faturamento_diario
   limpar_tela
-  print "Informe a data (AAAA-MM-DD): "
-  data = gets.chomp
+  print "Informe a data (DD/MM/AAAA): "
+  entrada = gets.chomp
+  data = Date.strptime(entrada, "%d/%m/%Y").strftime("%Y-%m-%d")
 
   total = DB.execute(
     "SELECT SUM(valor_total) AS total FROM vendas WHERE DATE(data_hora) = ?",
     [data]
   ).first
 
-  puts "\nFaturamento do dia #{data}: R$ #{total['total'] || 0}"
+  puts "\nFaturamento do dia #{entrada}: R$ #{total['total'] || 0}"
   pausar
 end
 
@@ -190,22 +222,15 @@ def produtos_mais_vendidos
   puts "PRODUTOS MAIS VENDIDOS\n\n"
 
   query = <<-SQL
-    SELECT p.nome,
-           SUM(i.quantidade) AS total_vendido
+    SELECT p.nome, SUM(i.quantidade) AS total
     FROM itens_venda i
     INNER JOIN produtos p ON i.id_produto = p.id_produto
     GROUP BY p.nome
-    ORDER BY total_vendido DESC
+    ORDER BY total DESC
   SQL
 
-  resultados = DB.execute(query)
-
-  if resultados.empty?
-    puts "Nenhuma venda registrada."
-  else
-    resultados.each_with_index do |p, index|
-      puts "#{index + 1}. #{p['nome']} - #{p['total_vendido']} unidades"
-    end
+  DB.execute(query).each_with_index do |p, i|
+    puts "#{i + 1}. #{p['nome']} - #{p['total']} unidades"
   end
 
   pausar
@@ -213,11 +238,10 @@ end
 
 def clientes_com_desconto
   limpar_tela
-  puts "CLIENTES FREQUENTES (POR CONSTÂNCIA)\n\n"
+  puts "CLIENTES FREQUENTES\n\n"
 
   query = <<-SQL
-    SELECT c.nome,
-           COUNT(DISTINCT DATE(v.data_hora)) AS dias
+    SELECT c.nome, COUNT(DISTINCT DATE(v.data_hora)) AS dias
     FROM vendas v
     INNER JOIN clientes c ON v.id_cliente = c.id_cliente
     GROUP BY c.nome
@@ -226,9 +250,7 @@ def clientes_com_desconto
 
   DB.execute(query).each do |c|
     desconto =
-      if c["dias"] >= 20
-        "20% de desconto"
-      elsif c["dias"] >= 10
+      if c["dias"] >= 2
         "10% de desconto"
       else
         "Sem desconto"
@@ -240,9 +262,8 @@ def clientes_com_desconto
   pausar
 end
 
-# ======================================
+
 # MENUS
-# ======================================
 MENU = <<~MENU
   ---------------------------------
           CAMPUS FOOD
@@ -259,7 +280,7 @@ MENU_RELATORIOS = <<~MENU
   ---------------------------------
            RELATÓRIOS
   ---------------------------------
-  1 - Listar Vendas
+  1 - Histórico Completo de Vendas
   2 - Faturamento Diário
   3 - Produtos Mais Vendidos
   4 - Clientes Frequentes / Desconto
@@ -267,9 +288,6 @@ MENU_RELATORIOS = <<~MENU
   ---------------------------------
 MENU
 
-# ======================================
-# CONTROLE DE MENUS
-# ======================================
 def menu_principal
   loop do
     limpar_tela
@@ -309,9 +327,7 @@ def menu_principal
   end
 end
 
-# ======================================
 # INICIALIZAÇÃO
-# ======================================
 limpar_tela
 puts "Bem-vindo ao CAMPUS FOOD!"
 pausar
