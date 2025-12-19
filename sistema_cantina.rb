@@ -234,7 +234,7 @@ def produtos_mais_vendidos
   pausar
 end
 
-def clientes_com_desconto
+def clientes_frequentes
   limpar_tela
   puts "CLIENTES FREQUENTES\n\n"
 
@@ -248,19 +248,19 @@ def clientes_com_desconto
 
   DB.execute(query).each do |c|
     desconto =
-      if c["dias"] >= 2
+      if c["dias"] >= 100
         "10% de desconto"
       else
         "Sem desconto"
       end
 
-    puts "#{c['nome']} - #{c['dias']} dias → #{desconto}"
+    puts "#{c['nome']} - #{c['dias']} dias"
   end
 
   pausar
 end
 
-# LISTAR CLIENTES/ 'PRODUTOS
+# LISTAR CLIENTES/ PRODUTOS
 def listar_clientes
   limpar_tela
   puts "CLIENTES CADASTRADOS\n\n"
@@ -393,7 +393,7 @@ def menu_principal
         when 1 then listar_vendas
         when 2 then faturamento_diario
         when 3 then produtos_mais_vendidos
-        when 4 then clientes_com_desconto
+        when 4 then clientes_frequentes
         when 5 then break
         else
           puts "Opção inválida!"
