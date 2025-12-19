@@ -145,9 +145,7 @@ def registrar_venda
   ).first["dias"]
 
   percentual =
-    if dias >= 20
-      0.20
-    elsif dias >= 2
+    if dias >= 2
       0.10
     else
       0.0
