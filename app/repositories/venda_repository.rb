@@ -33,4 +33,17 @@ class VendaRepository
       )
     end
   end
+
+  def self.historico
+    Database.connection.execute <<-SQL
+      SELECT
+        v.id,
+        v.data_hora,
+        v.valor_total,
+        c.nome AS cliente_nome
+      FROM vendas v
+      INNER JOIN clientes c ON v.cliente_id = c.id
+      ORDER BY v.id ASC
+    SQL
+  end
 end
